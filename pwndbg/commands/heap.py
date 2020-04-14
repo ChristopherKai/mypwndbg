@@ -241,7 +241,8 @@ def malloc_chunk(addr,fake=False):
     if not fake and non_main_arena:
         arena = main_heap.get_heap(addr)['ar_ptr']
 
-    fastbins = [] if fake else main_heap.fastbins(arena)
+    fastbins = {} if fake else main_heap.fastbins(arena)
+    # print(fastbins)
     header = M.get(addr)
     if fake:
         header += message.prompt(' FAKE')
@@ -275,13 +276,18 @@ def malloc_chunk(addr,fake=False):
         pass
 
     chunk_str='\n'
-    freed = not prev_inuse
+    fastbin = fastbins.get(actual_size,[])
+    if addr in fastbin:
+        freed = True
+    else:
+        freed = not prev_inuse
+
     prev_size = hex(int(chunk["value"]["prev_size"]))
     size = hex(int(chunk["value"]["size"]))
     fd = hex(int(chunk["value"]["fd"]))
     bk = hex(int(chunk["value"]["bk"]))
-    chunk_str += "prev_size:{:>18} size:{:>18}\n".format(prev_size,size)
-    chunk_str += "fd       :{:>18} bk  :{:>18}".format(fd,bk)
+    chunk_str += "prev_size:{:>20} size:{:>20}\n".format(prev_size,size)
+    chunk_str += "       fd:{:>20}   bk:{:>20}".format(fd,bk)
 
     color = green if freed else white
     print(header, color(chunk_str))
