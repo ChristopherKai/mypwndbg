@@ -18,6 +18,7 @@ import pwndbg.typeinfo
 from pwndbg.color import generateColorFunction
 from pwndbg.color import message
 
+from pwndbg.color import *
 
 def read_chunk(addr):
     # in old versions of glibc, `mchunk_[prev_]size` was simply called `[prev_]size`
@@ -253,7 +254,37 @@ def malloc_chunk(addr,fake=False):
         header += message.hint(' IS_MMAPED')
     if non_main_arena:
         header += message.hint(' NON_MAIN_ARENA')
-    print(header, chunk["value"])
+    
+    # old
+    # chunk_str='{\n'
+    # for key in chunk["value"].type.keys():
+    #     chunk_str+='  %s = %s,\n'%(str(key),hex(int(chunk["value"][key])))
+    # chunk_str+='}'
+
+    # print(header, chunk_str)
+    # return chunk
+
+    # new 
+    # TODO: handle large chunk
+    try:
+        prev_inuse = True
+        nextchunk = read_chunk(addr + actual_size)
+        size = int(nextchunk['size'])
+        prev_inuse, is_mmapped, non_main_arena = main_heap.chunk_flags(size)
+    except:
+        pass
+
+    chunk_str='\n'
+    freed = not prev_inuse
+    prev_size = hex(int(chunk["value"]["prev_size"]))
+    size = hex(int(chunk["value"]["size"]))
+    fd = hex(int(chunk["value"]["fd"]))
+    bk = hex(int(chunk["value"]["bk"]))
+    chunk_str += "prev_size:{:>18} size:{:>18}\n".format(prev_size,size)
+    chunk_str += "fd       :{:>18} bk  :{:>18}".format(fd,bk)
+
+    color = green if freed else white
+    print(header, color(chunk_str))
 
     return chunk
 
@@ -609,3 +640,49 @@ def bin_addrs(b, bins_type):
     else:  # normal bin
         addrs, _, _ = b
     return addrs
+
+# mycommands
+@pwndbg.commands.ParsedCommand
+@pwndbg.commands.OnlyWhenRunning
+def fake_fastbin_all(addr):
+    """
+    Finds candidate fake fast chunks that will overlap with the specified
+    address. Used for fastbin dups and house of spirit
+    """
+    main_heap = pwndbg.heap.current
+
+    max_fast = main_heap.global_max_fast
+    max_idx  = main_heap.fastbin_index(max_fast)
+    start    = int(addr) - int(max_fast)
+    mem      = pwndbg.memory.read(start, max_fast, partial=True)
+
+    fmt = {
+        'little': '<',
+        'big': '>'
+    }[pwndbg.arch.endian] + {
+        4: 'I',
+        8: 'Q'
+    }[pwndbg.arch.ptrsize]
+
+    print(C.banner("FAKE CHUNKS"))
+    for idx in range(max_idx +1):
+        if pwndbg.arch.ptrsize == 8:
+            print(message.hint(hex((idx+2)<<4))+": ")
+        else:
+            print(message.hint(hex((idx+2)<<3))+": ")
+
+        for offset in range(max_fast - pwndbg.arch.ptrsize):
+            candidate = mem[offset:offset + pwndbg.arch.ptrsize]
+            if len(candidate) == pwndbg.arch.ptrsize:
+                value = struct.unpack(fmt, candidate)[0]
+                if main_heap.fastbin_index(value&0xffffffff) == idx:
+                    print('[+]',hex(start+offset-pwndbg.arch.ptrsize),', padding len:',hex(int(addr)-start-offset-pwndbg.arch.ptrsize))
+
+
+@pwndbg.commands.ParsedCommand
+@pwndbg.commands.OnlyWhenRunning
+def libcbase():
+    """
+    show address of libcbase
+    """
+    pass
