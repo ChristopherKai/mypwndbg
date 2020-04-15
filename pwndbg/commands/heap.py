@@ -672,19 +672,30 @@ def find_fake_fast_all(addr):
     }[pwndbg.arch.ptrsize]
 
     print(C.banner("FAKE CHUNKS"))
+    if max_idx <= 0:
+        print(red('heap not initialized yet,call me later.'))
+        return 
+
     for idx in range(max_idx +1):
         if pwndbg.arch.ptrsize == 8:
-            print(message.hint(hex((idx+2)<<4))+": ")
+            chunk_size = (idx+2)<<4
         else:
-            print(message.hint(hex((idx+2)<<3))+": ")
+            chunk_size = (idx+2)<<3
+
+        print(message.hint(hex(chunk_size)+": "))
 
         for offset in range(length - pwndbg.arch.ptrsize):
             candidate = mem[offset:offset + pwndbg.arch.ptrsize]
             if len(candidate) == pwndbg.arch.ptrsize:
-                value = struct.unpack(fmt, candidate)[0]
+                value = struct.unpack(fmt, candidate)[0] & 0xffffffff
                 # if idx == max_idx - 1: print(hex(offset + start), hex(value))
-                if main_heap.fastbin_index(value&0xffffffff) == idx:
-                    print('[+]',hex(start+offset-pwndbg.arch.ptrsize),', padding len:',hex(int(addr)-start-offset-pwndbg.arch.ptrsize))
+                chunk_end_ptr = start + offset + chunk_size + pwndbg.arch.ptrsize  # pwndbg.arch.ptrsize for prev_size
+                # second condition to check if this chunk can hold our address to write 
+                can_be_hold = (addr + pwndbg.arch.ptrsize) <= chunk_end_ptr
+                if main_heap.fastbin_index(value) == idx and can_be_hold:
+                    chunk_ptr = start + offset - pwndbg.arch.ptrsize
+                    padding = hex(int(addr)-chunk_ptr-pwndbg.arch.ptrsize  * 2)
+                    print('[+]',hex(start+offset-pwndbg.arch.ptrsize),', padding len:',padding)
 
 
 @pwndbg.commands.ParsedCommand
@@ -693,4 +704,6 @@ def libcbase():
     """
     show address of libcbase
     """
+    for page in pages:
+        print(M.get(page.vaddr, text=str(page)))
     pass
