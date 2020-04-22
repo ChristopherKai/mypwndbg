@@ -281,11 +281,11 @@ def malloc_chunk(addr,fake=False):
         freed = True
     else:
         freed = not prev_inuse
-
-    prev_size = hex(int(chunk["value"]["prev_size"]))
-    size = hex(int(chunk["value"]["size"]))
-    fd = hex(int(chunk["value"]["fd"]))
-    bk = hex(int(chunk["value"]["bk"]))
+    
+    prev_size = hex(int(chunk["prev_size"]))
+    size = hex(int(chunk["size"]))
+    fd = hex(int(chunk["fd"]))
+    bk = hex(int(chunk["bk"]))
     chunk_str += "prev_size:{:>20} size:{:>20}\n".format(prev_size,size)
     chunk_str += "       fd:{:>20}   bk:{:>20}".format(fd,bk)
 
